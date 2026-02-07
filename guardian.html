@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>StudentWell Triage</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: Arial; }
+        body { background: #f0f2f5; padding: 20px; }
+        .container { max-width: 800px; margin: auto; background: rgb(54, 61, 96); border-radius: 10px; padding: 30px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
+        .tab { display: none; }
+        .tab.active { display: block; }
+        .tabs { display: flex; margin-bottom: 30px; border-bottom: 2px solid #030000; }
+        .tab-btn { padding: 15px 30px; background: none; border: none; cursor: pointer; }
+        .tab-btn.active { border-bottom: 3px solid #2563eb; color: #2563eb; }
+        .question { background: #f8fafc; padding: 25px; border-radius: 10px; margin: 20px 0; }
+        .scale { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin: 20px 0; }
+        .scale-btn { padding: 15px; border: 2px solid #000000; background: rgb(29, 3, 125); border-radius: 8px; cursor: pointer; }
+        .scale-btn.selected { background: #2563eb; color: white; border-color: #2563eb; }
+        button { padding: 12px 25px; background: #2563eb; color: white; border: none; border-radius: 8px; cursor: pointer; margin: 10px; }
+        button:hover { background: #1d4ed8; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { padding: 15px; text-align: left; border-bottom: 1px solid #ddd; }
+        .risk-low { color: green; }
+        .risk-medium { color: orange; }
+        .risk-high { color: red; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="tabs">
+            <button class="tab-btn active" onclick="showTab('student')">Student Assessment</button>
+            <button class="tab-btn" onclick="showTab('admin')">Admin Dashboard</button>
+        </div>
+
+        <!-- Student Assessment -->
+        <div id="studentTab" class="tab active">
+            <h2>Mental Health Assessment</h2>
+            <div id="questions">
+                <div class="question">
+                    <p>1. How often have you felt down or depressed in the past week?</p>
+                    <div class="scale">
+                        <button class="scale-btn" onclick="selectAnswer(1, 0)">Never</button>
+                        <button class="scale-btn" onclick="selectAnswer(1, 1)">Rarely</button>
+                        <button class="scale-btn" onclick="selectAnswer(1, 2)">Sometimes</button>
+                        <button class="scale-btn" onclick="selectAnswer(1, 3)">Often</button>
+                        <button class="scale-btn" onclick="selectAnswer(1, 4)">Always</button>
+                    </div>
+                </div>
+                <div class="question">
+                    <p>2. How often have you felt anxious or stressed?</p>
+                    <div class="scale">
+                        <button class="scale-btn" onclick="selectAnswer(2, 0)">Never</button>
+                        <button class="scale-btn" onclick="selectAnswer(2, 1)">Rarely</button>
+                        <button class="scale-btn" onclick="selectAnswer(2, 2)">Sometimes</button>
+                        <button class="scale-btn" onclick="selectAnswer(2, 3)">Often</button>
+                        <button class="scale-btn" onclick="selectAnswer(2, 4)">Always</button>
+                    </div>
+                </div>
+                <div class="question">
+                    <p>3. How is your sleep quality?</p>
+                    <div class="scale">
+                        <button class="scale-btn" onclick="selectAnswer(3, 4)">Excellent</button>
+                        <button class="scale-btn" onclick="selectAnswer(3, 3)">Good</button>
+                        <button class="scale-btn" onclick="selectAnswer(3, 2)">Fair</button>
+                        <button class="scale-btn" onclick="selectAnswer(3, 1)">Poor</button>
+                        <button class="scale-btn" onclick="selectAnswer(3, 0)">Very Poor</button>
+                    </div>
+                </div>
+            </div>
+            <input type="text" id="studentId" placeholder="Enter Student ID" style="padding: 12px; width: 200px; margin: 20px 0;">
+            <button onclick="submitAssessment()">Submit Assessment</button>
+            <div id="results" style="display:none; margin-top:30px; padding:20px; background:#f0f9ff; border-radius:10px;">
+                <h3>Your Results</h3>
+                <p id="riskLevel"></p>
+                <p id="suggestion"></p>
+            </div>
+        </div>
+
+        <!-- Admin Dashboard -->
+        <div id="adminTab" class="tab">
+            <h2>Admin Dashboard</h2>
+            <input type="password" id="adminPass" placeholder="Admin Password" style="padding:10px; margin:10px 0;">
+            <button onclick="loginAdmin()">Login</button>
+            <div id="dashboard" style="display:none;">
+                <h3>Student Risk Status</h3>
+                <table id="studentTable">
+                    <thead>
+                        <tr>
+                            <th>Student ID</th>
+                            <th>Last Assessment</th>
+                            <th>Risk Level</th>
+                            <th>Score</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody"></tbody>
+                </table>
+                <div style="margin-top:30px;">
+                    <h4>Quick Stats</h4>
+                    <p>Total Students: <span id="totalStudents">0</span></p>
+                    <p>High Risk: <span id="highRisk">0</span></p>
+                    <p>Medium Risk: <span id="mediumRisk">0</span></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Database simulation
+        let database = {
+            students: {},
+            adminPass: "admin123"
+        };
+
+        // Load from localStorage
+        if (localStorage.getItem('studentwell_db')) {
+            database = JSON.parse(localStorage.getItem('studentwell_db'));
+        }
+
+        let studentAnswers = {};
+        let adminLoggedIn = false;
+        function selectAnswer(q, score) {
+            // Remove selection from all buttons in this question
+            event.target.parentElement.querySelectorAll('.scale-btn').forEach(btn => {
+                btn.classList.remove('selected');
+            });
+            event.target.classList.add('selected');
+            studentAnswers[q] = score;
+        }
+
+        function submitAssessment() {
+            const studentId = document.getElementById('studentId').value;
+            if (!studentId) return alert("Enter Student ID(admn no.)");
+            if (Object.keys(studentAnswers).length < 3) return alert("Answer all questions");
+
+            const total = Object.values(studentAnswers).reduce((a,b) => a + b, 0);
+            let risk = "Low";
+            let suggestion = "You're doing well. Maintain your routine.";
+            
+            if (total > 8) {
+                risk = "High";
+                suggestion = "High risk detected. Please contact campus counseling immediately.";
+            } else if (total > 4) {
+                risk = "Medium";
+                suggestion = "Moderate stress detected. Consider talking to a counselor.";
+            }
+
+            // Save to database
+            database.students[studentId] = {
+                score: total,
+                risk: risk,
+                date: new Date().toLocaleDateString(),
+                answers: studentAnswers
+            };
+            localStorage.setItem('studentwell_db', JSON.stringify(database));
+
+            // Show results
+            document.getElementById('riskLevel').innerHTML = `<strong>Risk Level: <span class="risk-${risk.toLowerCase()}">${risk}</span></strong>`;
+            document.getElementById('suggestion').textContent = suggestion;
+            document.getElementById('results').style.display = 'block';
+            
+            // Reset
+            studentAnswers = {};
+            document.querySelectorAll('.scale-btn').forEach(btn => btn.classList.remove('selected'));
+        }
+
+        function showTab(tab) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById(tab + 'Tab').classList.add('active');
+            event.target.classList.add('active');
+            
+            if (tab === 'admin') updateDashboard();
+        }
+
+        function loginAdmin() {
+            if (document.getElementById('adminPass').value === database.adminPass) {
+                document.getElementById('dashboard').style.display = 'block';
+                updateDashboard();
+            } else {
+                alert("Wrong password");
+            }
+        }
+
+        function updateDashboard() {
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = '';
+            let total = 0, high = 0, medium = 0;
+            
+            for (const [id, data] of Object.entries(database.students)) {
+                total++;
+                if (data.risk === "High") high++;
+                if (data.risk === "Medium") medium++;
+                
+                tbody.innerHTML += `
+                    <tr>
+                        <td>${id}</td>
+                        <td>${data.date}</td>
+                        <td class="risk-${data.risk.toLowerCase()}">${data.risk}</td>
+                        <td>${data.score}/12</td>
+                    </tr>
+                `;
+            }
+            
+            document.getElementById('totalStudents').textContent = total;
+            document.getElementById('highRisk').textContent = high;
+            document.getElementById('mediumRisk').textContent = medium;
+        }
+
+        // Auto-login for demo
+        setTimeout(() => {
+            if (Object.keys(database.students).length > 0) updateDashboard();
+        }, 100);
+    </script>
+</body>
+</html>
+<div id="loadingScreen" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #363d60 0%, #1d037d 100%); display: flex; justify-content: center; align-items: center; z-index: 9999;">
+    <div style="text-align: center;">
+        <h1 style="color: white; font-size: 48px; margin-bottom: 20px; animation: fadeInDown 0.8s ease;">StudentWell -- Triage</h1>
+        <div style="width: 50px; height: 50px; border: 4px solid rgba(255,255,255,0.3); border-top: 4px solid white; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto;"></div>
+    </div>
+</div>
+
+<style>
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    @keyframes fadeInDown {
+        0% { opacity: 0; transform: translateY(-20px); }
+        100% { opacity: 1; transform: translateY(0); }
+    }
+</style>
+
+<script>
+    window.addEventListener('load', () => {
+        setTimeout(() => {
+            document.getElementById('loadingScreen').style.display = 'none';
+        }, 2000);
+    });
+</script>
